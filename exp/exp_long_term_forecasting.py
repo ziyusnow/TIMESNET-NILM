@@ -142,7 +142,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     loss = criterion(outputs, batch_y)
                     train_loss.append(loss.item())
 
-                if (i + 1) % 100 == 0:
+                if (i + 1) % 5000 == 0:
                     print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
                     speed = (time.time() - time_now) / iter_count
                     left_time = speed * ((self.args.train_epochs - epoch) * train_steps - i)
@@ -240,12 +240,12 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
                 preds.append(pred)
                 trues.append(true)
-                if i % 20 == 0:
-                    #input = batch_x[:,:,0].detach().cpu().numpy()
-                    input = batch_x[:,:,0]
-                    if test_data.scale and self.args.inverse:
-                        shape = input.shape
-                        input = input*test_data.std_value[0]+test_data.mean_value[0]
+                # if i % 20 == 0:
+                #     #input = batch_x[:,:,0].detach().cpu().numpy()
+                #     input = batch_x[:,:,0]
+                #     if test_data.scale and self.args.inverse:
+                #         shape = input.shape
+                #         input = input*test_data.std_value[0]+test_data.mean_value[0]
                     
                     #需要画图更新    
                     # gt = np.concatenate((input[0, :, -1], true[0, :, -1]), axis=0)
@@ -255,10 +255,15 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         preds = np.concatenate(preds, axis=0)
         trues = np.concatenate(trues, axis=0)
+        preds = preds.reshape(-1, preds.shape[-1])
+        trues = trues.reshape(-1, trues.shape[-1])
+
+        for i in range(4):
+          pd=preds[:,i]
+          gt=trues[:,i]          
+          visual(gt, pd, os.path.join(folder_path, str(i) + '.pdf'))
         print('test shape:', preds.shape, trues.shape)
-        preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
-        trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
-        print('test shape:', preds.shape, trues.shape)
+        
 
         # result save
         folder_path = './results/' + setting + '/'
