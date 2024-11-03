@@ -32,10 +32,18 @@ def MSPE(pred, true):
 
 
 def metric(pred, true):
-    mae = MAE(pred, true)
-    mse = MSE(pred, true)
-    rmse = RMSE(pred, true)
-    mape = MAPE(pred, true)
-    mspe = MSPE(pred, true)
+    valid_indices = np.abs(true) > 0.1
+    vali_pred_values = pred[valid_indices]
+    vali_true_values = true[valid_indices]
+    mae = MAE(vali_pred_values, vali_true_values)
+    mse = MSE(vali_pred_values, vali_true_values)
+    rmse = RMSE(vali_pred_values, vali_true_values)
+    mape = MAPE(vali_pred_values, vali_true_values)
+    mspe = MSPE(vali_pred_values, vali_true_values)
+    # mae = MAE(pred, true)
+    # mse = MSE(pred, true)
+    # rmse = RMSE(pred, true)
+    # mape = MAPE(pred, true)
+    # mspe = MSPE(pred, true)
 
     return mae, mse, rmse, mape, mspe

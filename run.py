@@ -22,7 +22,7 @@ if __name__ == '__main__':
     parser.add_argument('--task_name', type=str, required=False, default='long_term_forecast',
                         help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
     parser.add_argument('--is_training', type=int, required=False, default=1, help='status')
-    parser.add_argument('--model_id', type=str, required=False, default='1101_inverse_test', help='model id')
+    parser.add_argument('--model_id', type=str, required=False, default='1103_inverse_test', help='model id')
     parser.add_argument('--model', type=str, required=False, default='TimesNet',
                         help='model name, options: [Autoformer, Transformer, TimesNet]')
 
@@ -40,7 +40,7 @@ if __name__ == '__main__':
     # forecasting task
     parser.add_argument('--seq_len', type=int, default=64, help='input sequence length')
     parser.add_argument('--label_len', type=int, default=32, help='start token length')
-    parser.add_argument('--pred_len', type=int, default=0, help='prediction sequence length')
+    parser.add_argument('--pred_len', type=int, default=0, help='prediction sequence length') #区间为【i,i+seq_len】——》【i+seq_len-label_len,.+1】
     parser.add_argument('--seasonal_patterns', type=str, default='Monthly', help='subset for M4')
     parser.add_argument('--inverse', action='store_true', help='inverse output data', default=True)
 
@@ -53,16 +53,16 @@ if __name__ == '__main__':
     # model define
     parser.add_argument('--expand', type=int, default=2, help='expansion factor for Mamba')
     parser.add_argument('--d_conv', type=int, default=4, help='conv kernel size for Mamba')
-    parser.add_argument('--top_k', type=int, default=5, help='for TimesBlock')
-    parser.add_argument('--num_kernels', type=int, default=6, help='for Inception')
+    parser.add_argument('--top_k', type=int, default=4, help='for TimesBlock')
+    parser.add_argument('--num_kernels', type=int, default=3, help='for Inception')
     parser.add_argument('--enc_in', type=int, default=4, help='encoder input size')
     parser.add_argument('--dec_in', type=int, default=4, help='decoder input size')
     parser.add_argument('--c_out', type=int, default=4, help='output size')
-    parser.add_argument('--d_model', type=int, default=16, help='dimension of model')
-    parser.add_argument('--n_heads', type=int, default=8, help='num of heads')
+    parser.add_argument('--d_model', type=int, default=8, help='dimension of model')
+    parser.add_argument('--n_heads', type=int, default=4, help='num of heads')
     parser.add_argument('--e_layers', type=int, default=2, help='num of encoder layers')
     parser.add_argument('--d_layers', type=int, default=1, help='num of decoder layers')
-    parser.add_argument('--d_ff', type=int, default=32, help='dimension of fcn')
+    parser.add_argument('--d_ff', type=int, default=8, help='dimension of fcn')
     parser.add_argument('--moving_avg', type=int, default=12, help='window size of moving average')
     parser.add_argument('--factor', type=int, default=1, help='attn factor')
     parser.add_argument('--distil', action='store_false',

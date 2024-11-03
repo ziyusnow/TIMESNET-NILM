@@ -257,6 +257,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         trues = np.concatenate(trues, axis=0)
         preds = preds.reshape(-1, preds.shape[-1])
         trues = trues.reshape(-1, trues.shape[-1])
+        preds[preds < 0] = 0 
 
         for i in range(4):
           pd=preds[:,i]
