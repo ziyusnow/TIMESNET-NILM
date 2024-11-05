@@ -87,6 +87,8 @@ class Model(nn.Module):
         self.layer = configs.e_layers
         self.layer_norm = nn.LayerNorm(configs.d_model)
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+            self.act = F.gelu
+            self.dropout = nn.Dropout(configs.dropout)
             self.predict_linear = nn.Linear(
                 self.seq_len, self.pred_len + self.seq_len)
             self.projection = nn.Linear(
@@ -116,6 +118,8 @@ class Model(nn.Module):
         for i in range(self.layer):
             enc_out = self.layer_norm(self.model[i](enc_out))
         # porject back
+        enc_out = self.act(enc_out)
+        enc_out = self.dropout(enc_out)
         dec_out = self.projection(enc_out) 
 
         # De-Normalization from Non-stationary Transformer
