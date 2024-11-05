@@ -12,13 +12,14 @@ import numpy as np
 from utils.dtw_metric import dtw,accelerated_dtw
 from utils.augmentation import run_augmentation,run_augmentation_single
 from tqdm import tqdm
-
+from torch.utils.tensorboard import SummaryWriter
 warnings.filterwarnings('ignore')
 
 
 class Exp_Long_Term_Forecast(Exp_Basic):
     def __init__(self, args):
         super(Exp_Long_Term_Forecast, self).__init__(args)
+        self.writer = SummaryWriter(log_dir='./logs')  # 创建一个 TensorBoard 的日志记录器
 
     def _build_model(self):
         model = self.model_dict[self.args.model].Model(self.args).float()
@@ -32,7 +33,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         return data_set, data_loader
 
     def _select_optimizer(self):
-        model_optim = optim.Adam(self.model.parameters(), lr=self.args.learning_rate)
+        model_optim = optim.Adam(self.model.parameters(), lr=self.args.learning_rate,weight_decay=self.args.weight_decay)
         return model_optim
 
     def _select_criterion(self):
@@ -160,7 +161,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
             print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
             train_loss = np.average(train_loss)
+            self.writer.add_scalar('Loss/Train', train_loss, epoch)
             vali_loss = self.vali(vali_data, vali_loader, criterion)
+            self.writer.add_scalar('Loss/Validation', vali_loss, epoch)
             test_loss = self.vali(test_data, test_loader, criterion)
 
             print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f} Test Loss: {4:.7f}".format(
@@ -169,11 +172,11 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
-
             adjust_learning_rate(model_optim, epoch + 1, self.args)
-
+        self.writer.close()  # 关闭 TensorBoard 记录器
         best_model_path = path + '/' + 'checkpoint.pth'
         self.model.load_state_dict(torch.load(best_model_path))
+
 
         return self.model
 

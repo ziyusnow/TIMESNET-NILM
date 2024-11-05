@@ -22,7 +22,7 @@ if __name__ == '__main__':
     parser.add_argument('--task_name', type=str, required=False, default='long_term_forecast',
                         help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
     parser.add_argument('--is_training', type=int, required=False, default=1, help='status')
-    parser.add_argument('--model_id', type=str, required=False, default='1103_inverse_test', help='model id')
+    parser.add_argument('--model_id', type=str, required=False, default='11051621_inverse_test', help='model id')
     parser.add_argument('--model', type=str, required=False, default='TimesNet',
                         help='model name, options: [Autoformer, Transformer, TimesNet]')
 
@@ -38,8 +38,8 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoints', type=str, default='./checkpoints/', help='location of model checkpoints')
 
     # forecasting task
-    parser.add_argument('--seq_len', type=int, default=64, help='input sequence length')
-    parser.add_argument('--label_len', type=int, default=32, help='start token length')
+    parser.add_argument('--seq_len', type=int, default=32, help='input sequence length')
+    parser.add_argument('--label_len', type=int, default=16, help='start token length')
     parser.add_argument('--pred_len', type=int, default=0, help='prediction sequence length') #区间为【i,i+seq_len】——》【i+seq_len-label_len,.+1】
     parser.add_argument('--seasonal_patterns', type=str, default='Monthly', help='subset for M4')
     parser.add_argument('--inverse', action='store_true', help='inverse output data', default=True)
@@ -58,8 +58,8 @@ if __name__ == '__main__':
     parser.add_argument('--enc_in', type=int, default=4, help='encoder input size')
     parser.add_argument('--dec_in', type=int, default=4, help='decoder input size')
     parser.add_argument('--c_out', type=int, default=4, help='output size')
-    parser.add_argument('--d_model', type=int, default=8, help='dimension of model')
-    parser.add_argument('--n_heads', type=int, default=4, help='num of heads')
+    parser.add_argument('--d_model', type=int, default=4, help='dimension of model')
+    parser.add_argument('--n_heads', type=int, default=2, help='num of heads')
     parser.add_argument('--e_layers', type=int, default=2, help='num of encoder layers')
     parser.add_argument('--d_layers', type=int, default=1, help='num of decoder layers')
     parser.add_argument('--d_ff', type=int, default=8, help='dimension of fcn')
@@ -68,7 +68,7 @@ if __name__ == '__main__':
     parser.add_argument('--distil', action='store_false',
                         help='whether to use distilling in encoder, using this argument means not using distilling',
                         default=True)
-    parser.add_argument('--dropout', type=float, default=0.1, help='dropout')
+    parser.add_argument('--dropout', type=float, default=0.7, help='dropout')
     parser.add_argument('--embed', type=str, default='timeF',
                         help='time features encoding, options:[timeF, fixed, learned]')
     parser.add_argument('--activation', type=str, default='gelu', help='activation')
@@ -88,14 +88,15 @@ if __name__ == '__main__':
     # optimization
     parser.add_argument('--num_workers', type=int, default=0, help='data loader num workers')
     parser.add_argument('--itr', type=int, default=1, help='experiments times')
-    parser.add_argument('--train_epochs', type=int, default=3, help='train epochs')
+    parser.add_argument('--train_epochs', type=int, default=30, help='train epochs')
     parser.add_argument('--batch_size', type=int, default=8, help='batch size of train input data')
-    parser.add_argument('--patience', type=int, default=3, help='early stopping patience')
+    parser.add_argument('--patience', type=int, default=1000, help='early stopping patience')
     parser.add_argument('--learning_rate', type=float, default=0.001, help='optimizer learning rate')
     parser.add_argument('--des', type=str, default='Exp', help='exp description')
     parser.add_argument('--loss', type=str, default='SMAPE', help='loss function')
     parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate')
     parser.add_argument('--use_amp', action='store_true', help='use automatic mixed precision training', default=False)
+    parser.add_argument('--weight_decay', type=float, default=0.001, help='optimizer weight_decay')
 
     # GPU
     parser.add_argument('--use_gpu', type=bool, default=True, help='use gpu')
@@ -104,9 +105,9 @@ if __name__ == '__main__':
     parser.add_argument('--devices', type=str, default='0', help='device ids of multile gpus')
 
     # de-stationary projector params
-    parser.add_argument('--p_hidden_dims', type=int, nargs='+', default=[128, 128],
+    parser.add_argument('--p_hidden_dims', type=int, nargs='+', default=[16, 16],
                         help='hidden layer dimensions of projector (List)')
-    parser.add_argument('--p_hidden_layers', type=int, default=2, help='number of hidden layers in projector')
+    parser.add_argument('--p_hidden_layers', type=int, default=1, help='number of hidden layers in projector')
 
     # metrics (dtw)
     parser.add_argument('--use_dtw', type=bool, default=False, 
