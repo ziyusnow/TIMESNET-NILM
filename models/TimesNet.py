@@ -89,8 +89,10 @@ class Model(nn.Module):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             self.act = F.gelu
             self.dropout = nn.Dropout(configs.dropout)
-            self.predict_linear = nn.Linear(
+            self.predict_linear1 = nn.Linear(
                 self.seq_len, self.pred_len + self.seq_len)
+            self.predict_linear2 = nn.Linear(
+                self.pred_len + self.seq_len, 1)
             self.projection = nn.Linear(
                 configs.d_model, configs.c_out, bias=True)
         if self.task_name == 'imputation' or self.task_name == 'anomaly_detection':
@@ -112,23 +114,23 @@ class Model(nn.Module):
 
         # embedding
         enc_out = self.enc_embedding(x_enc, x_mark_enc)  # [B,T,C]  #[4,64,16]
-        enc_out = self.predict_linear(enc_out.permute(0, 2, 1)).permute(
-            0, 2, 1)  # align temporal dimension
+        enc_out = self.predict_linear1(enc_out.permute(0, 2, 1)).permute(0, 2, 1) # align temporal dimension
         # TimesNet
         for i in range(self.layer):
             enc_out = self.layer_norm(self.model[i](enc_out))
         # porject back
         enc_out = self.act(enc_out)
         enc_out = self.dropout(enc_out)
-        dec_out = self.projection(enc_out) 
+        enc_out = self.projection(enc_out) 
+        dec_out=self.predict_linear2(enc_out.permute(0, 2, 1)).permute(0, 2, 1)         
 
         # De-Normalization from Non-stationary Transformer
         dec_out = dec_out * \
                   (stdev[:, 0, :].unsqueeze(1).repeat(
-                      1, self.pred_len + self.seq_len, 1))
+                      1, 1, 1))
         dec_out = dec_out + \
                   (means[:, 0, :].unsqueeze(1).repeat(
-                      1, self.pred_len + self.seq_len, 1))  #[4,64,4]
+                      1, 1, 1))  #[4,64,4]
         return dec_out
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
