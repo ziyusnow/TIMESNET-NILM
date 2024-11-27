@@ -5,7 +5,7 @@ import glob
 import re
 import torch
 from torch.utils.data import Dataset, DataLoader
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from utils.timefeatures import time_features
 from data_provider.m4 import M4Dataset, M4Meta
 from data_provider.uea import subsample, interpolate_missing, Normalizer
@@ -241,7 +241,8 @@ class Dataset_Custom(Dataset):
         self.__read_data__()
 
     def __read_data__(self):
-        self.scaler = StandardScaler()
+        #self.scaler = StandardScaler()
+        self.scaler =MinMaxScaler()
         df_raw = pd.read_csv(os.path.join(self.root_path,
                                           self.data_path))
 
@@ -269,8 +270,11 @@ class Dataset_Custom(Dataset):
         if self.scale:
             train_data = df_data[border1s[0]:border2s[0]]
             self.scaler.fit(train_data.values)
-            self.mean_value = self.scaler.mean_
-            self.std_value = self.scaler.scale_
+            #self.mean_value = self.scaler.mean_
+            #self.std_value = self.scaler.scale_
+            self.min_value = self.scaler.min_
+            self.max_value = self.scaler.data_max_
+            self.dif_value=self.max_value-self.min_value
             data = self.scaler.transform(df_data.values)
         else:
             data = df_data.values

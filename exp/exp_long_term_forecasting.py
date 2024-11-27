@@ -1,6 +1,6 @@
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
-from utils.tools import EarlyStopping, adjust_learning_rate, visual
+from utils.tools import EarlyStopping, adjust_learning_rate, visual,CustomMSELoss
 from utils.metrics import metric
 import torch
 import torch.nn as nn
@@ -37,7 +37,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         return model_optim
 
     def _select_criterion(self):
-        criterion = nn.MSELoss()
+        criterion = CustomMSELoss(alpha=10.0, threshold_low=0.1, threshold_high=0.7)
         return criterion
 
     def vali(self, vali_data, vali_loader, criterion):
@@ -188,6 +188,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         preds = []
         trues = []
+        meter=[]
         folder_path = './test_results/' + setting + '/'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
@@ -224,19 +225,22 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
                 batch_x = batch_x.detach().cpu().numpy()
+                outputs=np.maximum(outputs,0)
                 if test_data.scale and self.args.inverse:
                     # batch_x_sig = batch_x[:,:,:1]
                     # outputs = np.concatenate((batch_x_sig, outputs), axis=1)
                     # batch_y = np.concatenate((batch_x_sig, batch_y), axis=1)
 
                     shape = outputs.shape #(4,1,4)
-                    outputs=outputs*test_data.std_value[1:]+test_data.mean_value[1:]
-                    batch_y=batch_y*test_data.std_value[1:]+test_data.mean_value[1:]
+                    outputs=outputs*test_data.dif_value[1:]+test_data.min_value[1:]
+                    batch_y=batch_y*test_data.dif_value[1:]+test_data.min_value[1:]
+                    batch_x=batch_x*test_data.dif_value[0]+test_data.min_value[0]
                     #outputs = test_data.inverse_transform(outputs.reshape(shape[0] * shape[1], -1)).reshape(shape)
                     #batch_y = test_data.inverse_transform(batch_y.reshape(shape[0] * shape[1], -1)).reshape(shape)
-        
+
                 outputs = outputs[:, :, f_dim:]
                 batch_y = batch_y[:, :, f_dim:]
+                batch_x=[]
 
                 pred = outputs
                 true = batch_y
@@ -260,7 +264,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         trues = np.concatenate(trues, axis=0)
         preds = preds.reshape(-1, preds.shape[-1])
         trues = trues.reshape(-1, trues.shape[-1])
-        preds[preds < 0] = 0 
+        #preds[preds < 0] = 0 
 
         for i in range(4):
           pd=preds[:,i]

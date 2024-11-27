@@ -20,16 +20,17 @@ data_column = data.columns[1]  # 数据列的名称
 # 假设时间列是字符串格式，例如 'YYYY-MM-DD HH:MM:SS'
 # 如果时间格式不同，请修改format参数
 data[time_column] = pd.to_datetime(data[time_column], format='%Y-%m-%d %H:%M:%S')
-
+data=data[-16609:]
+data.reset_index(drop=True, inplace=True)
 # 设置时间列为索引
-data.set_index(time_column, inplace=True)
+#data.set_index(time_column, inplace=True)
 
 # 绘制折线图
 plt.figure(figsize=(15, 7))
-plt.plot(data.index, data[data_column], label=data_column)
+plt.plot( data[data_column], label=data_column)
 plt.title(f'Time Series of {data_column}')
 plt.xlabel('Time')
 plt.ylabel(data_column)
 plt.legend()
 plt.grid(True)
-plt.show()
+plt.savefig('test_batch_y')

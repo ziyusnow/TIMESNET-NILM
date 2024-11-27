@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 import torch
+import torch.nn as nn
 import matplotlib.pyplot as plt
 import pandas as pd
 import math
@@ -116,3 +117,32 @@ def adjustment(gt, pred):
 
 def cal_accuracy(y_pred, y_true):
     return np.mean(y_pred == y_true)
+
+
+class CustomMSELoss(nn.Module):
+    def __init__(self, alpha=3.0, threshold_low=0.1, threshold_high=0.9):
+        super().__init__()
+        self.alpha = alpha
+        self.threshold_low = threshold_low
+        self.threshold_high = threshold_high
+        self.base_loss = nn.MSELoss(reduction='none')
+    
+    def forward(self, pred, true):
+        # 计算基础MSE损失
+        base_loss = self.base_loss(pred, true)
+        
+        # 计算相对误差，用于识别极值区域
+        #relative_true = true / (torch.max(torch.abs(true)) + 1e-7)
+        
+        # 创建权重掩码
+        weights = torch.ones_like(true)
+        
+        # 接近0的区域增加权重
+        weights[torch.abs(true) < self.threshold_low] *= (1 + self.alpha)
+        
+        # 接近极值的区域增加权重
+        weights[torch.abs(true) > self.threshold_high] *= (1 + self.alpha)
+        
+        # 应用权重
+        weighted_loss = base_loss * weights
+        return weighted_loss.mean()
