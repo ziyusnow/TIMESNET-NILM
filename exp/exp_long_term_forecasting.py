@@ -1,6 +1,6 @@
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
-from utils.tools import EarlyStopping, adjust_learning_rate, visual,CustomMSELoss
+from utils.tools import EarlyStopping, adjust_learning_rate, visual,FocalLoss
 from utils.metrics import metric
 import torch
 import torch.nn as nn
@@ -37,17 +37,18 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         return model_optim
 
     def _select_criterion(self):
-        criterion = CustomMSELoss(alpha=10.0, threshold_low=0.1, threshold_high=0.7)
-        return criterion
+        criterion = nn.MSELoss().to(self.device)
+        classification_loss = nn.BCEWithLogitsLoss().to(self.device)
+        return criterion,classification_loss
 
-    def vali(self, vali_data, vali_loader, criterion):
+    def vali(self, vali_data, vali_loader, criterion,classification_loss):
         total_loss = []
         self.model.eval()
         with torch.no_grad():
-            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in tqdm(enumerate(vali_loader),desc='vali',total=len(vali_loader)):
+            for i, (batch_x, batch_y, batch_s,batch_x_mark, batch_y_mark) in tqdm(enumerate(vali_loader),desc='vali',total=len(vali_loader)):
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float().to(self.device)
-
+                batch_s = batch_s.float().to(self.device) 
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 batch_y_mark = batch_y_mark.float().to(self.device)
 
@@ -65,16 +66,17 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     if self.args.output_attention:
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
                     else:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                        outputs,states = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
                 f_dim = -1 if self.args.features == 'MS' else 0
                 outputs = outputs[:, -1:, f_dim:]
+                states = states[:, -1:, f_dim:]
+                states=torch.sigmoid(states)
+                states = (states >= 0.6).float()
                 batch_y = batch_y[:, -1:, f_dim:].to(self.device)
-
-                pred = outputs.detach().cpu()
-                true = batch_y.detach().cpu()
-
-                loss = criterion(pred, true)
-
+                outputs=states*outputs
+                re_loss = criterion(outputs, batch_y).detach().cpu()
+                cla_loss= classification_loss(states,batch_s).detach().cpu()
+                loss=re_loss+cla_loss
                 total_loss.append(loss)
         total_loss = np.average(total_loss)
         self.model.train()
@@ -95,7 +97,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         early_stopping = EarlyStopping(patience=self.args.patience, verbose=True)
 
         model_optim = self._select_optimizer()
-        criterion = self._select_criterion()   #MSE
+        criterion,classification_loss = self._select_criterion()   #MSE
 
         if self.args.use_amp:
             scaler = torch.cuda.amp.GradScaler()
@@ -106,11 +108,12 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
             self.model.train()
             epoch_time = time.time()
-            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in tqdm(enumerate(train_loader),total=len(train_loader)):
+            for i, (batch_x, batch_y, batch_s,batch_x_mark, batch_y_mark) in tqdm(enumerate(train_loader),total=len(train_loader)):
                 iter_count += 1
                 model_optim.zero_grad()
                 batch_x = batch_x.float().to(self.device) #[4,64,4]
                 batch_y = batch_y.float().to(self.device) #[4,1,4]
+                batch_s = batch_s.float().to(self.device)
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 batch_y_mark = batch_y_mark.float().to(self.device)
 
@@ -135,12 +138,16 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     if self.args.output_attention:
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
                     else:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)#[4,64,4]
+                        outputs,states = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)#[4,64,4]
 
                     f_dim = -1 if self.args.features == 'MS' else 0
                     outputs = outputs[:, -1:, f_dim:]#[4,1,4]
+                    states = states[:, -1:, f_dim:]
                     batch_y = batch_y[:, -1:, f_dim:].to(self.device)
-                    loss = criterion(outputs, batch_y)
+                    batch_s = batch_s[:, -1:, f_dim:].to(self.device) 
+                    re_loss = criterion(outputs, batch_y)
+                    loss=classification_loss(states,batch_s)
+                    #loss=re_loss+cla_loss
                     train_loss.append(loss.item())
 
                 if (i + 1) % 5000 == 0:
@@ -162,10 +169,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
             train_loss = np.average(train_loss)
             self.writer.add_scalar('Loss/Train', train_loss, epoch)
-            vali_loss = self.vali(vali_data, vali_loader, criterion)
+            vali_loss = self.vali(vali_data, vali_loader, criterion,classification_loss)
             self.writer.add_scalar('Loss/Validation', vali_loss, epoch)
-            test_loss = self.vali(test_data, test_loader, criterion)
-
+            test_loss = self.vali(test_data, test_loader, criterion,classification_loss)
             print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f} Test Loss: {4:.7f}".format(
                 epoch + 1, train_steps, train_loss, vali_loss, test_loss))
             early_stopping(vali_loss, self.model, path)
@@ -188,16 +194,18 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         preds = []
         trues = []
-        meter=[]
+        s_hat=[]
+        s_true=[]
         folder_path = './test_results/' + setting + '/'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
         self.model.eval()
         with torch.no_grad():
-            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in tqdm(enumerate(test_loader),desc='test',total=len(test_loader)):
+            for i, (batch_x, batch_y, batch_s,batch_x_mark, batch_y_mark) in tqdm(enumerate(test_loader),desc='test',total=len(test_loader)):
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float().to(self.device)
+                batch_s =batch_s.float().to(self.device)
 
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 batch_y_mark = batch_y_mark.float().to(self.device)
@@ -217,13 +225,18 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
 
                     else:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                        outputs,states = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
 
                 f_dim = -1 if self.args.features == 'MS' else 0
                 outputs = outputs[:, -1:, :]
-                batch_y = batch_y[:, -1:, :].to(self.device)
+                states = states[:, -1:, :]
+                states=torch.sigmoid(states)
+                states = (states >= 0.6).float()
+                batch_y = batch_y[:, -1:, :]
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
+                states=states.detach().cpu().numpy()
+                batch_s=batch_s.detach().cpu().numpy()
                 batch_x = batch_x.detach().cpu().numpy()
                 outputs=np.maximum(outputs,0)
                 if test_data.scale and self.args.inverse:
@@ -240,13 +253,15 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
                 outputs = outputs[:, :, f_dim:]
                 batch_y = batch_y[:, :, f_dim:]
-                batch_x=[]
+                batch_x=batch_x[:]
 
                 pred = outputs
                 true = batch_y
 
                 preds.append(pred)
                 trues.append(true)
+                s_hat.append(states)
+                s_true.append(batch_s)
                 # if i % 20 == 0:
                 #     #input = batch_x[:,:,0].detach().cpu().numpy()
                 #     input = batch_x[:,:,0]
@@ -262,14 +277,21 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         preds = np.concatenate(preds, axis=0)
         trues = np.concatenate(trues, axis=0)
+        s_hat = np.concatenate(s_hat, axis=0)
+        s_true = np.concatenate(s_true, axis=0)        
         preds = preds.reshape(-1, preds.shape[-1])
         trues = trues.reshape(-1, trues.shape[-1])
+        s_hat = s_hat.reshape(-1, s_hat.shape[-1])
+        s_true = s_true.reshape(-1, s_true.shape[-1])
         #preds[preds < 0] = 0 
 
         for i in range(4):
           pd=preds[:,i]
           gt=trues[:,i]          
           visual(gt, pd, os.path.join(folder_path, str(i) + '.pdf'))
+          sh=s_hat[:,i]
+          st=s_true[:,i]
+          visual(st, sh, os.path.join(folder_path, str(i) + 'state.pdf'))
         print('test shape:', preds.shape, trues.shape)
         
 

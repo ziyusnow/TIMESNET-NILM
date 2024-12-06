@@ -22,9 +22,20 @@ if __name__ == '__main__':
     parser.add_argument('--task_name', type=str, required=False, default='long_term_forecast',
                         help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
     parser.add_argument('--is_training', type=int, required=False, default=1, help='status')
-    parser.add_argument('--model_id', type=str, required=False, default='11211118_inverse_test', help='model id')
-    parser.add_argument('--model', type=str, required=False, default='TimesNet',
+    parser.add_argument('--model_id', type=str, required=False, default='12041821_inverse_test', help='model id')
+    parser.add_argument('--model', type=str, required=False, default='LSTM',
                         help='model name, options: [Autoformer, Transformer, TimesNet]')
+     # 添加METER，APPLIANCE，THRESHOLD，MIN_ON，MIN_OFF参数，    
+    parser.add_argument('--METER', type=str, required=False, default='aggregate',
+                        help='Specify the meter type')    
+    parser.add_argument('--APPLIANCE', type=str, required=False, nargs='+', default=['AHU0', 'AHU1', 'AHU2', 'AHU5'],
+                    help='Specify the name of the appliance')
+    parser.add_argument('--THRESHOLD', type=float, required=False, nargs='+', default=[500., 450., 450., 1200.],
+                        help='Specify the threshold values')
+    parser.add_argument('--MIN_ON', type=float, required=False, nargs='+', default=[30, 30, 30, 30.],
+                        help='Specify the minimum on time values')
+    parser.add_argument('--MIN_OFF', type=float, required=False, nargs='+', default=[30, 30, 30, 30],
+                        help='Specify the minimum off time values')
 
     # data loader
     parser.add_argument('--data', type=str, required=False, default='custom', help='dataset type')
@@ -91,12 +102,12 @@ if __name__ == '__main__':
     parser.add_argument('--train_epochs', type=int, default=50, help='train epochs')
     parser.add_argument('--batch_size', type=int, default=64, help='batch size of train input data')
     parser.add_argument('--patience', type=int, default=5, help='early stopping patience')
-    parser.add_argument('--learning_rate', type=float, default=0.001, help='optimizer learning rate')
+    parser.add_argument('--learning_rate', type=float, default=0.0001, help='optimizer learning rate')
     parser.add_argument('--des', type=str, default='Exp', help='exp description')
     parser.add_argument('--loss', type=str, default='MSE', help='loss function')
     parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate')
     parser.add_argument('--use_amp', action='store_true', help='use automatic mixed precision training', default=False)
-    parser.add_argument('--weight_decay', type=float, default=0.1, help='optimizer weight_decay')
+    parser.add_argument('--weight_decay', type=float, default=0.00001, help='optimizer weight_decay')
 
     # GPU
     parser.add_argument('--use_gpu', type=bool, default=True, help='use gpu')

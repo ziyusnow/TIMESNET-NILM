@@ -12,6 +12,7 @@ from data_provider.uea import subsample, interpolate_missing, Normalizer
 from sktime.datasets import load_from_tsfile_to_dataframe
 import warnings
 from utils.augmentation import run_augmentation_single
+from data_provider.data_process import get_status
 
 warnings.filterwarnings('ignore')
 
@@ -236,6 +237,17 @@ class Dataset_Custom(Dataset):
         self.timeenc = timeenc
         self.freq = freq
 
+        self.METER=args.METER
+        self.APPLIANCE=args.APPLIANCE
+        self.THRESHOLD=args.THRESHOLD
+        self.MIN_ON=args.MIN_ON
+        self.MIN_OFF=args.MIN_OFF
+        # APPLIANCE = ['AHU0', 'AHU1', 'AHU2','AHU5']
+        # THRESHOLD = [500., 450., 450., 1200.]
+        # MIN_ON = [30, 30., 30., 30.]
+        # MIN_OFF = [30, 30.,30, 30]
+        # METER = 'aggregate'
+
         self.root_path = root_path
         self.data_path = data_path
         self.__read_data__()
@@ -260,6 +272,17 @@ class Dataset_Custom(Dataset):
         border2s = [num_train, num_train + num_vali, len(df_raw)]
         border1 = border1s[self.set_type]
         border2 = border2s[self.set_type]
+
+
+        ds_status = []
+        for i in range(1):
+            ds = df_raw.copy()
+            ds.set_index('date', inplace=True)
+            
+            status = pd.DataFrame()
+            for a in range(len(self.APPLIANCE)):
+                status = pd.concat([status, get_status(ds[self.APPLIANCE[a]], self.THRESHOLD[a], self.MIN_OFF[a], self.MIN_ON[a])], axis=1)
+            ds_status.append(status)
 
         if self.features == 'M' or self.features == 'MS':
             cols_data = df_raw.columns[1:]
@@ -295,6 +318,7 @@ class Dataset_Custom(Dataset):
         #self.data_y = data[border1:border2]
         self.data_x = np.repeat(data[border1:border2, 0].reshape(-1, 1), 4, axis=1)
         self.data_y = data[border1:border2, 1:]
+        self.status=ds_status[0].values[border1:border2,:]
         if self.set_type == 0 and self.args.augmentation_ratio > 0:
             self.data_x, self.data_y, augmentation_tags = run_augmentation_single(self.data_x, self.data_y, self.args)
 
@@ -309,10 +333,11 @@ class Dataset_Custom(Dataset):
         
         seq_x = self.data_x[s_begin:s_end]
         seq_y = self.data_y[r_begin:r_end]
+        seq_s=  self.status[r_begin:r_end]
         seq_x_mark = self.data_stamp[s_begin:s_end]
         seq_y_mark = self.data_stamp[r_begin:r_end]
 
-        return seq_x, seq_y, seq_x_mark, seq_y_mark
+        return seq_x, seq_y,seq_s, seq_x_mark, seq_y_mark
 
     def __len__(self):
         return len(self.data_x) - self.seq_len - self.pred_len + 1

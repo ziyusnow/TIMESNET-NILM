@@ -3,6 +3,7 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import pandas as pd
 import math
@@ -119,30 +120,35 @@ def cal_accuracy(y_pred, y_true):
     return np.mean(y_pred == y_true)
 
 
-class CustomMSELoss(nn.Module):
-    def __init__(self, alpha=3.0, threshold_low=0.1, threshold_high=0.9):
-        super().__init__()
-        self.alpha = alpha
-        self.threshold_low = threshold_low
-        self.threshold_high = threshold_high
-        self.base_loss = nn.MSELoss(reduction='none')
-    
-    def forward(self, pred, true):
-        # 计算基础MSE损失
-        base_loss = self.base_loss(pred, true)
+class FocalLoss(nn.Module):
+    def __init__(self, gamma=2):
+        """
+        :param gamma: 调整难易样本的权重的超参数，通常设为 2（默认值），增大时，难分类样本权重增加
+        """
+        super(FocalLoss, self).__init__()
+        self.gamma = gamma
+
+    def forward(self, y_pred, y_true):
+        """
+        :param y_pred: 模型输出的概率值（已经经过 sigmoid 激活的概率值）
+        :param y_true: 标签，0 或 1
+        """
+        assert y_pred.shape == y_true.shape
+        device = y_pred.device  # 获取 y_pred 所在的设备
         
-        # 计算相对误差，用于识别极值区域
-        #relative_true = true / (torch.max(torch.abs(true)) + 1e-7)
-        
-        # 创建权重掩码
-        weights = torch.ones_like(true)
-        
-        # 接近0的区域增加权重
-        weights[torch.abs(true) < self.threshold_low] *= (1 + self.alpha)
-        
-        # 接近极值的区域增加权重
-        weights[torch.abs(true) > self.threshold_high] *= (1 + self.alpha)
-        
-        # 应用权重
-        weighted_loss = base_loss * weights
-        return weighted_loss.mean()
+        # 计算预测的概率 pt
+        pt = y_pred  # 因为 y_pred 已经是经过 sigmoid 的概率值
+
+        # 计算交叉熵损失
+        bce_loss = F.binary_cross_entropy(y_pred, y_true, reduction='none')  # 逐样本计算损失
+
+        # 计算样本权重, (1 - pt) ** gamma，强调难分类样本
+        sample_weight = (1 - pt) ** self.gamma
+
+        # 通过权重调整损失
+        weighted_bce_loss = bce_loss * sample_weight
+
+        # 返回加权后的损失的平均值
+        return weighted_bce_loss.mean()
+
+
