@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.metrics import mean_absolute_error,mean_absolute_percentage_error
 
 
 def RSE(pred, true):
@@ -33,7 +34,7 @@ def MSPE(pred, true):
 
 def metric(pred, true):
     # 初始化存储每列指标的列表
-    mae_list, mse_list, rmse_list, mape_list, mspe_list = [], [], [], [], []
+    mae_list, mse_list, rmse_list, mape_list, mspe_list, mae1_list= [], [], [], [], [],[]
     
     # 获取列数（设备数量）
     n_devices = pred.shape[1]
@@ -45,16 +46,17 @@ def metric(pred, true):
         true_col = true[:, i]
         
         # 应用有效值过滤条件
-        valid_indices = np.abs(true_col) > 0.1
+        valid_indices = np.abs(true_col) > 100
         vali_pred_values = pred_col[valid_indices]
         vali_true_values = true_col[valid_indices]
         
         # 计算各项指标
-        mae = MAE(vali_pred_values, vali_true_values)
-        mse = MSE(vali_pred_values, vali_true_values)
-        rmse = RMSE(vali_pred_values, vali_true_values)
+        mae = MAE(pred_col, true_col)
+        mse = MSE(pred_col, true_col)
+        rmse = RMSE(pred_col, true_col)
         mape = MAPE(vali_pred_values, vali_true_values)
         mspe = MSPE(vali_pred_values, vali_true_values)
+        mae1=mean_absolute_error(pred_col,true_col)
         
         # 将结果添加到对应的列表中
         mae_list.append(mae)
@@ -62,6 +64,7 @@ def metric(pred, true):
         rmse_list.append(rmse)
         mape_list.append(mape)
         mspe_list.append(mspe)
+        mae1_list.append(mae1)
     
     # 将列表转换为numpy数组
     mae_array = np.array(mae_list)
@@ -69,5 +72,6 @@ def metric(pred, true):
     rmse_array = np.array(rmse_list)
     mape_array = np.array(mape_list)
     mspe_array = np.array(mspe_list)
+    mae1_array = np.array(mae1_list)
     
-    return mae_array, mse_array, rmse_array, mape_array, mspe_array
+    return mae_array, mse_array, rmse_array, mape_array, mspe_array,mae1_array

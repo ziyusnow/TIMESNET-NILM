@@ -2,6 +2,7 @@ from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
 from utils.tools import EarlyStopping, adjust_learning_rate, visual,FocalLoss
 from utils.metrics import metric
+from utils.status_metrics import status_metric
 import torch
 import torch.nn as nn
 from torch import optim
@@ -76,7 +77,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 outputs=states*outputs
                 re_loss = criterion(outputs, batch_y).detach().cpu()
                 cla_loss= classification_loss(states,batch_s).detach().cpu()
-                loss=re_loss+cla_loss
+                loss=re_loss+cla_loss*0.2
                 total_loss.append(loss)
         total_loss = np.average(total_loss)
         self.model.train()
@@ -141,13 +142,16 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                         outputs,states = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)#[4,64,4]
 
                     f_dim = -1 if self.args.features == 'MS' else 0
-                    outputs = outputs[:, -1:, f_dim:]#[4,1,4]
                     states = states[:, -1:, f_dim:]
-                    batch_y = batch_y[:, -1:, f_dim:].to(self.device)
                     batch_s = batch_s[:, -1:, f_dim:].to(self.device) 
+                    cla_loss=classification_loss(states,batch_s)
+                    states=torch.sigmoid(states)
+                    states = (states >= 0.6).float()
+                    outputs = outputs[:, -1:, f_dim:]#[4,1,4]
+                    outputs=outputs*states
+                    batch_y = batch_y[:, -1:, f_dim:].to(self.device)
                     re_loss = criterion(outputs, batch_y)
-                    loss=classification_loss(states,batch_s)
-                    #loss=re_loss+cla_loss
+                    loss=re_loss+cla_loss*0.2
                     train_loss.append(loss.item())
 
                 if (i + 1) % 5000 == 0:
@@ -172,6 +176,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             vali_loss = self.vali(vali_data, vali_loader, criterion,classification_loss)
             self.writer.add_scalar('Loss/Validation', vali_loss, epoch)
             test_loss = self.vali(test_data, test_loader, criterion,classification_loss)
+            self.writer.add_scalar('Learning_rate', self.args.learning_rate * (0.5 ** ((epoch - 1) // 4)), epoch)
             print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f} Test Loss: {4:.7f}".format(
                 epoch + 1, train_steps, train_loss, vali_loss, test_loss))
             early_stopping(vali_loss, self.model, path)
@@ -233,6 +238,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 states=torch.sigmoid(states)
                 states = (states >= 0.6).float()
                 batch_y = batch_y[:, -1:, :]
+                outputs=outputs*states
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
                 states=states.detach().cpu().numpy()
@@ -316,17 +322,33 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             dtw = -999
             
 
-        mae, mse, rmse, mape, mspe = metric(preds, trues)
-        print('mse:{}, mae:{}, rmse:{}, mape:{}, mspe:{}, dtw:{}'.format(mse, mae, rmse, mape, mspe,dtw))
+        mae, mse, rmse, mape, mspe,mae1= metric(preds, trues)
+        print('mse:{}, mae:{}, rmse:{}, mape:{}, mspe:{},mae1:{}, dtw:{}'.format(mse, mae, rmse, mape, mspe,mae1,dtw))
         f = open("result_long_term_forecast.txt", 'a')
         f.write(setting + "  \n")
-        f.write('mse:{}, mae:{}, rmse:{}, mape:{}, mspe:{}, dtw:{}'.format(mse, mae, rmse, mape, mspe,dtw))
+        f.write('mse:{}, mae:{}, rmse:{}, mape:{}, mspe:{}, mae1:{},dtw:{}'.format(mse, mae, rmse, mape, mspe,mae1,dtw))
         f.write('\n')
         f.write('\n')
         f.close()
 
+        f1, precision, recall, accuracy = status_metric(s_hat, s_true)
+        print('f1:{}, precision:{}, recall:{}, accuracy:{}'.format(f1, precision, recall, accuracy))
+        f = open("result_long_term_forecast.txt", 'a')
+        f.write(setting + "  \n")
+        f.write('f1:{}, precision:{}, recall:{}, accuracy:{}'.format(f1, precision, recall, accuracy))
+        f.write('\n')
+        f.write('\n')
+        f.close()
+
+
         np.save(folder_path + 'metrics.npy', np.array([mae, mse, rmse, mape, mspe]))
         np.save(folder_path + 'pred.npy', preds)
         np.save(folder_path + 'true.npy', trues)
+        np.save(folder_path + 'status_metrics.npy', np.array([f1, precision, recall, accuracy]))
+        np.save(folder_path + 's_hat.npy', s_hat)
+        np.save(folder_path + 's_true.npy', s_true)
+
+
+
 
         return

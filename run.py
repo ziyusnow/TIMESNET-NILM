@@ -22,7 +22,7 @@ if __name__ == '__main__':
     parser.add_argument('--task_name', type=str, required=False, default='long_term_forecast',
                         help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
     parser.add_argument('--is_training', type=int, required=False, default=1, help='status')
-    parser.add_argument('--model_id', type=str, required=False, default='12041821_inverse_test', help='model id')
+    parser.add_argument('--model_id', type=str, required=False, default='12061918_inverse_test', help='model id')
     parser.add_argument('--model', type=str, required=False, default='LSTM',
                         help='model name, options: [Autoformer, Transformer, TimesNet]')
      # 添加METER，APPLIANCE，THRESHOLD，MIN_ON，MIN_OFF参数，    
@@ -79,7 +79,7 @@ if __name__ == '__main__':
     parser.add_argument('--distil', action='store_false',
                         help='whether to use distilling in encoder, using this argument means not using distilling',
                         default=True)
-    parser.add_argument('--dropout', type=float, default=0.1, help='dropout')
+    parser.add_argument('--dropout', type=float, default=0.5, help='dropout')
     parser.add_argument('--embed', type=str, default='timeF',
                         help='time features encoding, options:[timeF, fixed, learned]')
     parser.add_argument('--activation', type=str, default='gelu', help='activation')
@@ -101,8 +101,8 @@ if __name__ == '__main__':
     parser.add_argument('--itr', type=int, default=1, help='experiments times')
     parser.add_argument('--train_epochs', type=int, default=50, help='train epochs')
     parser.add_argument('--batch_size', type=int, default=64, help='batch size of train input data')
-    parser.add_argument('--patience', type=int, default=5, help='early stopping patience')
-    parser.add_argument('--learning_rate', type=float, default=0.0001, help='optimizer learning rate')
+    parser.add_argument('--patience', type=int, default=20, help='early stopping patience')
+    parser.add_argument('--learning_rate', type=float, default=0.0008 , help='optimizer learning rate')
     parser.add_argument('--des', type=str, default='Exp', help='exp description')
     parser.add_argument('--loss', type=str, default='MSE', help='loss function')
     parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate')
