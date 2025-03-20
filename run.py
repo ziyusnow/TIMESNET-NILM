@@ -9,6 +9,12 @@ from exp.exp_classification import Exp_Classification
 from utils.print_args import print_args
 import random
 import numpy as np
+from skopt import gp_minimize
+from skopt.space import Real, Integer,Categorical
+from skopt.utils import use_named_args
+from logger_factory import setup_logger
+#pip install scikit-optimize
+logger = setup_logger('tool_test')
 
 if __name__ == '__main__':
     fix_seed = 2021
@@ -22,9 +28,9 @@ if __name__ == '__main__':
     parser.add_argument('--task_name', type=str, required=False, default='long_term_forecast',
                         help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
     parser.add_argument('--is_training', type=int, required=False, default=1, help='status')
-    parser.add_argument('--model_id', type=str, required=False, default='12061918_inverse_test', help='model id')
-    parser.add_argument('--model', type=str, required=False, default='LSTM',
-                        help='model name, options: [Autoformer, Transformer, TimesNet]')
+    parser.add_argument('--model_id', type=str, required=False, default='0306_timesnet_inverse_test', help='model id')
+    parser.add_argument('--model', type=str, required=False, default='TimesNet',
+                        help='model name, options: [Autoformer, Transformer, TimesNet,lstm,GRU]')
      # 添加METER，APPLIANCE，THRESHOLD，MIN_ON，MIN_OFF参数，    
     parser.add_argument('--METER', type=str, required=False, default='aggregate',
                         help='Specify the meter type')    
@@ -49,8 +55,8 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoints', type=str, default='./checkpoints/', help='location of model checkpoints')
 
     # forecasting task
-    parser.add_argument('--seq_len', type=int, default=64, help='input sequence length')
-    parser.add_argument('--label_len', type=int, default=32, help='start token length')
+    parser.add_argument('--seq_len', type=int, default=360, help='input sequence length')
+    parser.add_argument('--label_len', type=int, default=180, help='start token length')
     parser.add_argument('--pred_len', type=int, default=0, help='prediction sequence length') #区间为【i,i+seq_len】——》【i+seq_len-label_len,.+1】
     parser.add_argument('--seasonal_patterns', type=str, default='Monthly', help='subset for M4')
     parser.add_argument('--inverse', action='store_true', help='inverse output data', default=True)
@@ -69,17 +75,17 @@ if __name__ == '__main__':
     parser.add_argument('--enc_in', type=int, default=4, help='encoder input size')
     parser.add_argument('--dec_in', type=int, default=4, help='decoder input size')
     parser.add_argument('--c_out', type=int, default=4, help='output size')
-    parser.add_argument('--d_model', type=int, default=8, help='dimension of model')
-    parser.add_argument('--n_heads', type=int, default=1, help='num of heads')
-    parser.add_argument('--e_layers', type=int, default=1, help='num of encoder layers')
-    parser.add_argument('--d_layers', type=int, default=1, help='num of decoder layers')
+    parser.add_argument('--d_model', type=int, default=256, help='dimension of model')
+    parser.add_argument('--n_heads', type=int, default=7, help='num of heads')
+    parser.add_argument('--e_layers', type=int, default=2, help='num of encoder layers')
+    parser.add_argument('--d_layers', type=int, default=2, help='num of decoder layers')
     parser.add_argument('--d_ff', type=int, default=16, help='dimension of fcn')
     parser.add_argument('--moving_avg', type=int, default=12, help='window size of moving average')
     parser.add_argument('--factor', type=int, default=1, help='attn factor')
     parser.add_argument('--distil', action='store_false',
                         help='whether to use distilling in encoder, using this argument means not using distilling',
                         default=True)
-    parser.add_argument('--dropout', type=float, default=0.5, help='dropout')
+    parser.add_argument('--dropout', type=float, default=0.4344315054149511, help='dropout')
     parser.add_argument('--embed', type=str, default='timeF',
                         help='time features encoding, options:[timeF, fixed, learned]')
     parser.add_argument('--activation', type=str, default='gelu', help='activation')
@@ -95,14 +101,15 @@ if __name__ == '__main__':
                         help='down sampling method, only support avg, max, conv')
     parser.add_argument('--seg_len', type=int, default=48,
                         help='the length of segmen-wise iteration of SegRNN')
+    parser.add_argument('--search', type=int, default=0, help='is search')
 
     # optimization
     parser.add_argument('--num_workers', type=int, default=0, help='data loader num workers')
     parser.add_argument('--itr', type=int, default=1, help='experiments times')
-    parser.add_argument('--train_epochs', type=int, default=50, help='train epochs')
+    parser.add_argument('--train_epochs', type=int, default=5, help='train epochs')
     parser.add_argument('--batch_size', type=int, default=64, help='batch size of train input data')
-    parser.add_argument('--patience', type=int, default=20, help='early stopping patience')
-    parser.add_argument('--learning_rate', type=float, default=0.0008 , help='optimizer learning rate')
+    parser.add_argument('--patience', type=int, default=5, help='early stopping patience')
+    parser.add_argument('--learning_rate', type=float, default=6.614584754426876e-05 , help='optimizer learning rate')
     parser.add_argument('--des', type=str, default='Exp', help='exp description')
     parser.add_argument('--loss', type=str, default='MSE', help='loss function')
     parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate')
@@ -171,6 +178,48 @@ if __name__ == '__main__':
         Exp = Exp_Classification
     else:
         Exp = Exp_Long_Term_Forecast
+
+   # 定义超参数搜索空间
+    search_space = [
+        Real(1e-5, 1e-3, name='learning_rate'),
+        Categorical([16, 32, 64, 128], name='batch_size'),
+        Integer(16, 128, name='d_model'),
+        Integer(1, 8, name='n_heads'),
+        Integer(1, 4, name='e_layers'),
+        Integer(1, 4, name='d_layers'),
+        Real(0.1, 0.5, name='dropout')
+    ]
+
+    # 定义目标函数
+    @use_named_args(search_space)
+    def objective(**params):
+        args.learning_rate = params['learning_rate']
+        args.batch_size = params['batch_size']
+        args.d_model = params['d_model']if params['d_model'] % 2 == 0 else params['d_model'] + 1
+        args.n_heads = params['n_heads']if params['n_heads'] % 2 == 0 else params['n_heads'] + 1
+        args.e_layers = params['e_layers']if params['e_layers'] % 2 == 0 else params['e_layers'] + 1
+        args.d_layers = params['d_layers']if params['d_layers'] % 2 == 0 else params['d_layers'] + 1
+        args.dropout = params['dropout']
+        exp = Exp(args)
+        loss,_ = exp.train('temp_setting')
+        return loss
+    
+    # 定义回调函数
+    def callback(res):
+        logger.info(f"Iteration {len(res.func_vals)}: learning_rate={res.x_iters[-1][0]}, batch_size={res.x_iters[-1][1]}, d_model={res.x_iters[-1][2]}, n_heads={res.x_iters[-1][3]}, e_layers={res.x_iters[-1][4]}, d_layers={res.x_iters[-1][5]}, dropout={res.x_iters[-1][6]} -> loss={res.func_vals[-1]}")
+
+    if args.search:
+        result = gp_minimize(objective, search_space, n_calls=10, random_state=0,callback=[callback])
+        best_params = result.x
+        # 使用最佳超参数进行最终训练
+        args.learning_rate = best_params[0]
+        args.batch_size = best_params[1]
+        args.d_model = best_params[2]
+        args.n_heads = best_params[3]
+        args.e_layers = best_params[4]
+        args.d_layers = best_params[5]
+        args.dropout = best_params[6]
+
 
     if args.is_training:
         for ii in range(args.itr):

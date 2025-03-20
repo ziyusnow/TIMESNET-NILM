@@ -11,7 +11,7 @@ import math
 plt.switch_backend('agg')
 
 
-def adjust_learning_rate(optimizer, epoch, args):
+def adjust_learning_rate(optimizer, epoch, args, writer=None):
     # lr = args.learning_rate * (0.2 ** (epoch // 2))
     if args.lradj == 'type1':
         lr_adjust = {epoch: args.learning_rate * (0.5 ** ((epoch - 1) // 4))}
@@ -27,6 +27,8 @@ def adjust_learning_rate(optimizer, epoch, args):
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
         print('Updating learning rate to {}'.format(lr))
+        if writer:
+            writer.add_scalar('Learning_rate', lr, epoch)
 
 
 class EarlyStopping:
@@ -119,6 +121,12 @@ def adjustment(gt, pred):
 def cal_accuracy(y_pred, y_true):
     return np.mean(y_pred == y_true)
 
+def compute_loss_weights(re_loss, cla_loss):
+    total_loss = re_loss + cla_loss
+    re_weight = re_loss / total_loss
+    cla_weight = cla_loss / total_loss
+    return re_weight, cla_weight
+
 
 class FocalLoss(nn.Module):
     def __init__(self, gamma=2):
@@ -150,5 +158,4 @@ class FocalLoss(nn.Module):
 
         # 返回加权后的损失的平均值
         return weighted_bce_loss.mean()
-
 

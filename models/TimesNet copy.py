@@ -1,43 +1,15 @@
-from matplotlib import pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.fft
 from layers.Embed import DataEmbedding
-import seaborn as sns
-from pathlib import Path
 from layers.Conv_Blocks import Inception_Block_V1
-import numpy as np
-from matplotlib.colors import LinearSegmentedColormap
-
-class VisualConfig:
-    def __init__(self):
-        self.save_dir = Path('./visual_results')
-        self.cmap = self._create_blue_white_cmap()
-        self.active = False
-        self.current_epoch = 0
-        self.batch_num = 0
-        self.layer_index = 0
-        
-    def _create_blue_white_cmap(self):
-        """创建白到蓝渐变色谱"""
-        return LinearSegmentedColormap.from_list(
-            'white_blue',
-            [(1, 1, 1), (0.02, 0.16, 0.47)],  # 白到深蓝渐变
-            N=256
-        )
-    
-    def get_batch_path(self, epoch, batch_num, layer, k_index, period):
-        # 示例路径: visual_results/epoch_001/batch_000/layer_0
-        save_dir = self.save_dir / f"epoch_{epoch:03d}" / f"batch_{batch_num:03d}" / f"layer_{layer}"
-        save_dir.mkdir(parents=True, exist_ok=True)
-        
-        # 文件名示例: k0_p4.png
-        return save_dir / f"k{k_index}_p{period}.png"
 
 
 def FFT_for_Period(x, k=2):
+    # [B, T, C]
     xf = torch.fft.rfft(x, dim=1)
+    # find period by amplitudes
     frequency_list = abs(xf).mean(0).mean(-1)
     frequency_list[0] = 0
     _, top_list = torch.topk(frequency_list, k)
@@ -45,14 +17,13 @@ def FFT_for_Period(x, k=2):
     period = x.shape[1] // top_list
     return period, abs(xf).mean(-1)[:, top_list]
 
+
 class TimesBlock(nn.Module):
-    def __init__(self, configs,visual_config,layer_index):
+    def __init__(self, configs):
         super(TimesBlock, self).__init__()
         self.seq_len = configs.seq_len
         self.pred_len = configs.pred_len
         self.k = configs.top_k
-        self.visual_config = visual_config 
-        self.layer_index = layer_index
         # parameter-efficient design
         self.conv = nn.Sequential(
             Inception_Block_V1(configs.d_model, configs.d_ff,
@@ -61,7 +32,6 @@ class TimesBlock(nn.Module):
             Inception_Block_V1(configs.d_ff, configs.d_model,
                                num_kernels=configs.num_kernels)
         )
-
 
     def forward(self, x):
         B, T, N = x.size()
@@ -82,10 +52,6 @@ class TimesBlock(nn.Module):
             # reshape
             out = out.reshape(B, length // period, period,
                               N).permute(0, 3, 1, 2).contiguous()
-                        # 可视化堆叠后的向量
-            # 新增可视化调用
-            if self.visual_config.active and period > 1:  # 使用配置的激活状态
-                self._visualize_components(out, period, i)
             # 2D conv: from 1d Variation to 2d Variation
             out = self.conv(out)
             # reshape back
@@ -100,41 +66,6 @@ class TimesBlock(nn.Module):
         # residual connection
         res = res + x
         return res
-        
-    def _visualize_components(self, tensor, period, k_index):
-        """可视化核心方法"""
-        # 确保在CPU上操作
-        tensor = tensor.detach().cpu().float()
-        
-        # 自动选择可视化位置
-        batch_idx = 0  # 只看第一个样本
-        channel_idx = min(1, tensor.shape[1]-1)  # 选择第一个有效通道
-        
-        data = tensor[batch_idx, channel_idx]  # [num_segments, period]
-        
-        # 创建画布
-        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-        
-        # 2D热力图
-        sns.heatmap(data.numpy(), ax=axes[0], cmap=self.visual_config.cmap, 
-                    xticklabels=10, yticklabels=10)
-        axes[0].set_title(f'2D Structure\nPeriod: {period} | K: {k_index+1}')
-        axes[0].set_xlabel('Time Position in Period')
-        axes[0].set_ylabel('Segment Index')
-        
-        # 时域波形图
-        time_axis = torch.arange(data.shape[0]*data.shape[1]) / data.shape[1]
-        axes[1].plot(time_axis, data.flatten().numpy())
-        axes[1].set_title('Time Domain View')
-        axes[1].set_xlabel('Normalized Time')
-        axes[1].set_ylabel('Value')
-        axes[1].grid(True)
-        
-        # 自动保存图像
-        save_path = self.visual_config.get_batch_path(self.visual_config.current_epoch, self.visual_config.batch_num, self.visual_config.layer_index, k_index, period)
-        plt.savefig(save_path)
-        plt.close()  # 防止内存泄漏
-
 
 
 class Model(nn.Module):
@@ -142,24 +73,20 @@ class Model(nn.Module):
     Paper link: https://openreview.net/pdf?id=ju_Uqw384Oq
     """
 
-    def __init__(self, configs,visual_config):
+    def __init__(self, configs):
         super(Model, self).__init__()
         self.configs = configs
-        self.visual_config = visual_config
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len
         self.label_len = configs.label_len
         self.pred_len = configs.pred_len
-        self.model = nn.ModuleList([
-            TimesBlock(configs, visual_config, layer_index=i)
-            for i in range(configs.e_layers)  # i从0开始递增
-        ])
+        self.model = nn.ModuleList([TimesBlock(configs)
+                                    for _ in range(configs.e_layers)])
         self.enc_embedding = DataEmbedding(configs.enc_in, configs.d_model, configs.embed, configs.freq,
                                            configs.dropout)
         self.layer = configs.e_layers
         self.layer_norm = nn.LayerNorm(configs.d_model)
         self.num=16
-
 
             
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
@@ -191,8 +118,6 @@ class Model(nn.Module):
             self.dropout = nn.Dropout(configs.dropout)
             self.projection = nn.Linear(
                 configs.d_model * configs.seq_len, configs.num_class)
-                
-        
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
         # Normalization from Non-stationary Transformer

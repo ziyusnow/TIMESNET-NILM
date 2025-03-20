@@ -15,21 +15,16 @@ from utils.augmentation import run_augmentation,run_augmentation_single
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from logger_factory import setup_logger
-from models.TimesNet import VisualConfig
 warnings.filterwarnings('ignore')
 logger = setup_logger('tool_test')
 
 class Exp_Long_Term_Forecast(Exp_Basic):
     def __init__(self, args):
-        self.visual_config = VisualConfig()
-        self.visual_config.save_dir.mkdir(parents=True, exist_ok=True)
         super(Exp_Long_Term_Forecast, self).__init__(args)
         self.writer = SummaryWriter(log_dir='./logs')  # 创建一个 TensorBoard 的日志记录器
 
-
     def _build_model(self):
-        print(f"Building model with visual_config: {self.visual_config}")
-        model = self.model_dict[self.args.model].Model(self.args,self.visual_config).float()
+        model = self.model_dict[self.args.model].Model(self.args).float()
 
         if self.args.use_multi_gpu and self.args.use_gpu:
             model = nn.DataParallel(model, device_ids=self.args.device_ids)
@@ -49,7 +44,6 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         return criterion,classification_loss
 
     def vali(self, vali_data, vali_loader, criterion,classification_loss):
-        self.visual_config.active = True
         total_loss = []
         vali_y_true = []
         vali_y_pred = []
@@ -106,7 +100,6 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         vali_y_true=vali_y_true*vali_data.dif_value[1:]+vali_data.min_value[1:]
         vali_y_pred=vali_y_pred*vali_data.dif_value[1:]+vali_data.min_value[1:]
         self.model.train()
-        self.visual_config.active = False
         return total_loss,vali_y_true,vali_y_pred,vali_s_true,vali_s_pred
 
     def train(self, setting):
@@ -130,17 +123,15 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             scaler = torch.cuda.amp.GradScaler()
 
         for epoch in range(self.args.train_epochs):
-            self.visual_config.current_epoch = epoch
             iter_count = 0
             train_loss = []
             all_y_true = []
             all_y_pred = []
-            self.visual_config.active = False
+
             self.model.train()
             epoch_time = time.time()
             for i, (batch_x, batch_y, batch_s,batch_x_mark, batch_y_mark) in tqdm(enumerate(train_loader),total=len(train_loader)):
                 iter_count += 1
-                self.visual_config.batch_num = i
                 model_optim.zero_grad()
                 batch_x = batch_x.float().to(self.device) #[4,64,4]
                 batch_y = batch_y.float().to(self.device) #[4,1,4]
