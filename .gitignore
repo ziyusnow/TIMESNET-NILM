@@ -167,3 +167,7 @@ run_anylearn.py
 environment.txt
 command.md
 test_batch_y.png
+
+visual_train1_results/
+visual_train_results/
+visual_results/

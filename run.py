@@ -1,7 +1,7 @@
 import argparse
 import os
 import torch
-from exp.exp_long_term_forecasting import Exp_Long_Term_Forecast
+from exp.exp_long_term_forecasting_copy import Exp_Long_Term_Forecast
 from exp.exp_imputation import Exp_Imputation
 from exp.exp_short_term_forecasting import Exp_Short_Term_Forecast
 from exp.exp_anomaly_detection import Exp_Anomaly_Detection
@@ -28,7 +28,7 @@ if __name__ == '__main__':
     parser.add_argument('--task_name', type=str, required=False, default='long_term_forecast',
                         help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
     parser.add_argument('--is_training', type=int, required=False, default=1, help='status')
-    parser.add_argument('--model_id', type=str, required=False, default='0306_timesnet_inverse_test', help='model id')
+    parser.add_argument('--model_id', type=str, required=False, default='0425_timesnet_inverse_test', help='model id')
     parser.add_argument('--model', type=str, required=False, default='TimesNet',
                         help='model name, options: [Autoformer, Transformer, TimesNet,lstm,GRU]')
      # 添加METER，APPLIANCE，THRESHOLD，MIN_ON，MIN_OFF参数，    
@@ -36,6 +36,8 @@ if __name__ == '__main__':
                         help='Specify the meter type')    
     parser.add_argument('--APPLIANCE', type=str, required=False, nargs='+', default=['AHU0', 'AHU1', 'AHU2', 'AHU5'],
                     help='Specify the name of the appliance')
+    parser.add_argument('--APP_id', type=int, required=False, default=0,
+                    help='id of the appliance')
     parser.add_argument('--THRESHOLD', type=float, required=False, nargs='+', default=[500., 450., 450., 1200.],
                         help='Specify the threshold values')
     parser.add_argument('--MIN_ON', type=float, required=False, nargs='+', default=[30, 30, 30, 30.],
@@ -72,9 +74,9 @@ if __name__ == '__main__':
     parser.add_argument('--d_conv', type=int, default=4, help='conv kernel size for Mamba')
     parser.add_argument('--top_k', type=int, default=5, help='for TimesBlock')
     parser.add_argument('--num_kernels', type=int, default=1, help='for Inception')
-    parser.add_argument('--enc_in', type=int, default=4, help='encoder input size')
+    parser.add_argument('--enc_in', type=int, default=1, help='encoder input size')
     parser.add_argument('--dec_in', type=int, default=4, help='decoder input size')
-    parser.add_argument('--c_out', type=int, default=4, help='output size')
+    parser.add_argument('--c_out', type=int, default=1, help='output size')
     parser.add_argument('--d_model', type=int, default=256, help='dimension of model')
     parser.add_argument('--n_heads', type=int, default=7, help='num of heads')
     parser.add_argument('--e_layers', type=int, default=2, help='num of encoder layers')
@@ -106,7 +108,7 @@ if __name__ == '__main__':
     # optimization
     parser.add_argument('--num_workers', type=int, default=0, help='data loader num workers')
     parser.add_argument('--itr', type=int, default=1, help='experiments times')
-    parser.add_argument('--train_epochs', type=int, default=5, help='train epochs')
+    parser.add_argument('--train_epochs', type=int, default=4, help='train epochs')#5改1测试
     parser.add_argument('--batch_size', type=int, default=64, help='batch size of train input data')
     parser.add_argument('--patience', type=int, default=5, help='early stopping patience')
     parser.add_argument('--learning_rate', type=float, default=6.614584754426876e-05 , help='optimizer learning rate')

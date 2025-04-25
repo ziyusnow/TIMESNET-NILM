@@ -315,7 +315,7 @@ class Dataset_Custom(Dataset):
 
         #self.data_x = data[border1:border2]
         #self.data_y = data[border1:border2]
-        self.data_x = data[border1:border2, 0].reshape(-1, 1), 4, axis=1)
+        self.data_x = np.repeat(data[border1:border2, 0].reshape(-1, 1), 4, axis=1)
         self.data_y = data[border1:border2, 1:]
         self.status=ds_status[0].values[border1:border2,:]
         if self.set_type == 0 and self.args.augmentation_ratio > 0:

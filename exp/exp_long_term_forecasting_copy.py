@@ -15,16 +15,21 @@ from utils.augmentation import run_augmentation,run_augmentation_single
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from logger_factory import setup_logger
+from models.TimesNetcopy import VisualConfig
 warnings.filterwarnings('ignore')
 logger = setup_logger('tool_test')
 
 class Exp_Long_Term_Forecast(Exp_Basic):
     def __init__(self, args):
+        self.visual_config = VisualConfig()
+        self.visual_config.save_dir.mkdir(parents=True, exist_ok=True)
         super(Exp_Long_Term_Forecast, self).__init__(args)
         self.writer = SummaryWriter(log_dir='./logs')  # 创建一个 TensorBoard 的日志记录器
 
+
     def _build_model(self):
-        model = self.model_dict[self.args.model].Model(self.args).float()
+        print(f"Building model with visual_config: {self.visual_config}")
+        model = self.model_dict[self.args.model].Model(self.args,self.visual_config).float()
 
         if self.args.use_multi_gpu and self.args.use_gpu:
             model = nn.DataParallel(model, device_ids=self.args.device_ids)
@@ -52,6 +57,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         self.model.eval()
         with torch.no_grad():
             for i, (batch_x, batch_y, batch_s,batch_x_mark, batch_y_mark) in tqdm(enumerate(vali_loader),desc='vali',total=len(vali_loader)):
+
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float().to(self.device)
                 batch_s = batch_s.float().to(self.device) 
@@ -106,13 +112,14 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
         test_data, test_loader = self._get_data(flag='test')
+        self.visual_config.is_training=True
 
         path = os.path.join(self.args.checkpoints, setting)
         if not os.path.exists(path):
             os.makedirs(path)
 
         time_now = time.time()
-
+        
         train_steps = len(train_loader)
         early_stopping = EarlyStopping(patience=self.args.patience, verbose=True)
 
@@ -127,11 +134,12 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             train_loss = []
             all_y_true = []
             all_y_pred = []
-
+            self.visual_config.active = True
             self.model.train()
             epoch_time = time.time()
             for i, (batch_x, batch_y, batch_s,batch_x_mark, batch_y_mark) in tqdm(enumerate(train_loader),total=len(train_loader)):
                 iter_count += 1
+                self.visual_config.batch_num = i
                 model_optim.zero_grad()
                 batch_x = batch_x.float().to(self.device) #[4,64,4]
                 batch_y = batch_y.float().to(self.device) #[4,1,4]
@@ -204,6 +212,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             train_loss = np.average(train_loss)
             self.writer.add_scalar('Loss/Train', train_loss, epoch)
             logger.info('Train Loss | mse:{}, mae:{}, rmse:{}, mape:{}, mspe:{}'.format(mse, mae, rmse, mape, mspe))
+
+
             vali_loss,vali_y_true,vali_y_pred,vali_s_true,vali_s_pred= self.vali(vali_data, vali_loader, criterion,classification_loss)
             self.writer.add_scalar('Loss/Validation', vali_loss, epoch)
             test_loss,test_y_true,test_y_pred,vali_s_true,vali_s_pred = self.vali(test_data, test_loader, criterion,classification_loss)
@@ -230,10 +240,11 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
     def test(self, setting, test=0):
         test_data, test_loader = self._get_data(flag='test')
+        self.visual_config.is_training=False
         if test:
             print('loading model')
             self.model.load_state_dict(torch.load(os.path.join('./checkpoints/' + setting, 'checkpoint.pth')))
-
+            
         preds = []
         trues = []
         s_hat=[]
@@ -245,6 +256,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         self.model.eval()
         with torch.no_grad():
             for i, (batch_x, batch_y, batch_s,batch_x_mark, batch_y_mark) in tqdm(enumerate(test_loader),desc='test',total=len(test_loader)):
+                self.visual_config.batch_num = i
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float().to(self.device)
                 batch_s =batch_s.float().to(self.device)
